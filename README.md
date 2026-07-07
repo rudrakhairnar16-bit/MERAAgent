@@ -7,7 +7,7 @@ Agents for **Track 03 — Build Your Own** of the [Agents of SigNoz Hackathon](h
 | **Track** | 03 — Build Your Own |
 | **Team** | Team Enthusiast |
 | **University** | Dr. Kiran & Pallavi Patel Global University (KPGU), Vadodara |
-| **Twitter/X** | [@KartikGoluguri](https://x.com/KartikGoluguri) |
+| **Twitter/X** | [@rudrakhaire_](https://x.com/rudrakhaire_) |
 
 ---
 
