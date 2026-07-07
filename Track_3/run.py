@@ -147,4 +147,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        from rich.console import Console
+        print(" Launching terminal dashboard...")
+        from dashboard.cli import run_dashboard
+        run_dashboard()
+    except ImportError:
+        main()
