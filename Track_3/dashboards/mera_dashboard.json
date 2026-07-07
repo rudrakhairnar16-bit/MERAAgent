@@ -1,0 +1,18 @@
+{
+  "title": "MERA - Mirror Entity Recursive Agent",
+  "panels": [
+    {"title":"Review Latency","query":"avg(duration_ms) WHERE service.name='mera-main-agent'","type":"timeseries","unit":"ms"},
+    {"title":"LLM Confidence","query":"avg(attributes.review.confidence_score) WHERE service.name='mera-main-agent'","type":"gauge","min":0,"max":1},
+    {"title":"Anomalies Detected","query":"count(attributes.mirror.anomalies_detected) WHERE service.name='mera-mirror-agent'","type":"timeseries"},
+    {"title":"Auto-Fixes Applied","query":"count(attributes.mirror.fix_action) WHERE service.name='mera-mirror-agent'","type":"stat"},
+    {"title":"Issues per Review","query":"avg(attributes.review.issues_count) BY attributes.code.language WHERE service.name='mera-main-agent'","type":"bar"},
+    {"title":"Error Rate","query":"sum(rate(span_count{status_code='ERROR'})) BY service.name","type":"timeseries"},
+    {"title":"Service Graph","query":"service_graph WHERE service.name IN ['mera-main-agent','mera-mirror-agent']","type":"traces"},
+    {"title":"Recent Traces","query":"traces WHERE service.name='mera-main-agent' | limit 20","type":"list"}
+  ],
+  "alerts": [
+    {"name":"MERAHQ-HighLatency","condition":"avg(duration_ms) > 5000 for 5m","severity":"warning"},
+    {"name":"MERAHQ-LowConfidence","condition":"avg(attributes.review.confidence_score) < 0.4 for 3m","severity":"critical"},
+    {"name":"MERAHQ-AnomalySpike","condition":"count(attributes.mirror.anomalies_detected) > 15 in 5m","severity":"warning"}
+  ]
+}

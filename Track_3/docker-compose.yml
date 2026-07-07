@@ -1,0 +1,55 @@
+name: mera
+
+services:
+  main-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.main
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434/v1
+      - OLLAMA_MODEL=llama3.2:3b
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=mera-main-agent
+    depends_on: [otel-collector]
+    networks: [mera-net]
+
+  mirror-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.mirror
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434/v1
+      - OLLAMA_MODEL=llama3.2:3b
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=mera-mirror-agent
+      - SIGNOZ_MCP_URL=http://signoz-mcp:8000/mcp
+    depends_on: [otel-collector, signoz-mcp]
+    networks: [mera-net]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    volumes:
+      - ./signoz_config/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    ports: ["4318:4318"]
+    networks: [mera-net]
+
+  signoz:
+    image: signoz/frontend:latest
+    ports: ["3301:3301"]
+    environment:
+      - SIGNOZ_OTEL_COLLECTOR_ENDPOINT=otel-collector:4317
+    depends_on: [otel-collector]
+    networks: [mera-net]
+
+  signoz-mcp:
+    image: signoz/mcp-server:latest
+    ports: ["8000:8000"]
+    environment:
+      - SIGNOZ_MCP_ENDPOINT=http://signoz:3301
+    depends_on: [signoz]
+    networks: [mera-net]
+
+networks:
+  mera-net:
+    driver: bridge
