@@ -283,19 +283,6 @@ python run.py
 
 ---
 
-## Scorecard Assessment
-
-| Criteria | Score | Notes |
-|---|---|---|
-| **Potential Impact** | 8/10 | Self-healing agents solve real ops problems |
-| **Creativity & Innovation** | 9/10 | Agent observes itself via MCP — novel closed loop |
-| **Technical Excellence** | 8/10 | OTel instrumentation, retry logic, 8 tests, FastAPI dashboard, CI |
-| **Best Use of SigNoz** | 9/10 | Traces, MCP, Dashboards, Alerts, Metrics, Logs — all used |
-| **User Experience** | 8/10 | CLI + web dashboard, clear README, easy setup |
-| **Presentation Quality** | 7/10 | Complete README + architecture doc + PDF report. Demo video pending |
-
-**Overall: ~49/60**
-
 ---
 
 ## Tests
