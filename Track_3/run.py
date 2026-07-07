@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from main_agent.agent import PRReviewAgent
 from mirror_agent.mirror import run_self_healing_cycle
-from state import append_cycle, append_review, append_anomalies, append_fixes, update_alerts
+from state import append_cycle, append_review, append_anomalies, append_fixes, update_alerts, reset_state
 
 load_dotenv()
 
@@ -95,6 +95,8 @@ def run_main_agent_loop(agent, stop):
 
 
 def main():
+    reset_state()
+
     print("=" * 55)
     print("  MERA - Mirror Entity Recursive Agent")
     print("  Self-Healing AI System with SigNoz")
@@ -140,9 +142,22 @@ def main():
 
     stop.set()
     print("\n" + "=" * 55)
-    print("  Demo Complete - 3 Cycles Executed")
-    print("  Dashboard: http://localhost:9000")
-    print("  SigNoz:    http://localhost:8080")
+    print("  MERA Demo Complete!")
+    print("=" * 55)
+    print()
+    print("  What was done:")
+    print("   ✓ 3 code reviews performed by Main Agent")
+    print("   ✓ 3 self-healing cycles by Mirror Agent")
+    print("   ✓ OpenTelemetry traces sent to SigNoz")
+    print("   ✓ Anomalies detected and fixes generated")
+    print()
+    print("  Where to check:")
+    print("   MERA Dashboard  → http://localhost:9000")
+    print("   SigNoz Traces   → http://localhost:8080")
+    print("   SigNoz Alerts   → http://localhost:8080/alerts")
+    print()
+    print("  To clean up:")
+    print("   Run: scripts\\cleanup.bat")
     print("=" * 55)
 
 

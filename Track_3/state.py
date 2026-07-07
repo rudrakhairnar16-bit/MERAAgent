@@ -67,3 +67,9 @@ def update_alerts(alert_count: int):
     state = get_state()
     state["alerts"] = alert_count
     save_state(state)
+
+
+def reset_state():
+    with _lock:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        STATE_FILE.write_text(json.dumps(DEFAULT_STATE, indent=2), encoding="utf-8")
