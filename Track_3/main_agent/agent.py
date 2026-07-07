@@ -4,25 +4,10 @@ import time
 from dotenv import load_dotenv
 from openai import OpenAI as OpenAIBase
 from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Resource
 
 load_dotenv()
-
-resource = Resource(attributes={
-    "service.name": "mera-main-agent",
-    "service.version": "1.0.0",
-    "deployment.environment": "production"
-})
-provider = TracerProvider(resource=resource)
-endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
-exporter = OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces", timeout=1)
-provider.add_span_processor(BatchSpanProcessor(exporter, schedule_delay_millis=5000, max_queue_size=1024))
-trace.set_tracer_provider(provider)
-
-tracer = trace.get_tracer(__name__)
+from signoz_config.tracing import get_tracer, force_flush
+tracer = get_tracer("mera-main-agent")
 
 
 def retry(max_attempts=3, delay=1.0):
@@ -75,6 +60,7 @@ class PRReviewAgent:
                 "issues_found": len(review.get("issues", [])),
                 "latency_ms": latency_ms
             })
+            force_flush()
             return review
 
     @retry(max_attempts=3, delay=1.0)
@@ -84,9 +70,8 @@ class PRReviewAgent:
             span.set_attribute("llm.input_length", len(code))
 
             prompt = (
-                f"Review this {language} code. Return ONLY valid JSON with no explanation:\n"
-                '{"issues": [{"line": 1, "severity": "warning", "message": "desc", "suggestion": "fix"}], '
-                '"confidence": 0.95, "summary": "overall"}\n\n'
+                f"Review this {language} code. Return ONLY valid JSON. "
+                'Format: {"issues": [{"line": <int>, "severity": "warning|error|suggestion", "message": "<text>", "suggestion": "<text>"}], "confidence": <0.0-1.0>, "summary": "<text>"}\n\n'
                 f"Code:\n```{language}\n{code}\n```"
             )
 
@@ -94,7 +79,7 @@ class PRReviewAgent:
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "You are a code reviewer. Return ONLY valid JSON."},
+                        {"role": "system", "content": "You are a code reviewer. Return ONLY valid JSON with keys: issues (array), confidence (float 0-1), summary (string)."},
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.1,
@@ -122,26 +107,67 @@ class PRReviewAgent:
     @staticmethod
     def _try_parse_json(text: str) -> dict | None:
         import re
-        for attempt in [text.strip(), text.strip().strip("`"), text.strip().strip("`").strip("json")]:
-            if attempt.startswith("{"):
-                try:
-                    return json.loads(attempt)
-                except json.JSONDecodeError:
-                    pass
-        m = re.search(r'\{.*"issues".*"summary".*\}', text, re.DOTALL)
-        if m:
+        cleaned = text.strip().strip("`").strip()
+        if cleaned.startswith("json"):
+            cleaned = cleaned[4:].strip()
+
+        attempts = [cleaned]
+        brace_start = cleaned.find("{")
+        brace_end = cleaned.rfind("}")
+        if brace_start >= 0 and brace_end > brace_start:
+            attempts.append(cleaned[brace_start:brace_end+1])
+
+        jsons_found = re.findall(r'\{[^{}]*\}', cleaned, re.DOTALL)
+        attempts.extend(jsons_found)
+
+        for attempt in attempts:
             try:
-                return json.loads(m.group())
+                result = json.loads(attempt)
+                if isinstance(result, dict):
+                    return _normalize_review(result)
             except json.JSONDecodeError:
+                continue
+
+        merged = ""
+        for j in jsons_found:
+            merged += j
+        if merged:
+            merged = "[" + merged.replace("}{", "},{") + "]"
+            try:
+                items = json.loads(merged)
+                result = {}
+                for item in items:
+                    if isinstance(item, dict):
+                        result.update(item)
+                if result:
+                    return _normalize_review(result)
+            except (json.JSONDecodeError, TypeError):
                 pass
-        try:
-            start = text.find("{")
-            end = text.rfind("}")
-            if start >= 0 and end > start:
-                return json.loads(text[start:end+1])
-        except json.JSONDecodeError:
-            pass
+
         return None
+
+
+def _normalize_review(raw: dict) -> dict:
+    issues = raw.get("issues") or raw.get("errors") or raw.get("findings") or []
+    if isinstance(issues, dict):
+        issues = [issues]
+    normalized = []
+    for i in issues:
+        if isinstance(i, dict):
+            normalized.append({
+                "line": i.get("line", 0),
+                "severity": i.get("severity") or i.get("type", "warning"),
+                "message": i.get("message") or i.get("description") or i.get("detail", ""),
+                "suggestion": i.get("suggestion") or i.get("fix") or i.get("recommendation", "")
+            })
+    confidence = raw.get("confidence") or raw.get("score") or raw.get("confidence_score", 0)
+    if isinstance(confidence, str):
+        confidence = 0.0
+    return {
+        "issues": normalized,
+        "confidence": float(confidence) if isinstance(confidence, (int, float)) else 0.0,
+        "summary": raw.get("summary") or raw.get("description") or raw.get("conclusion", f"{len(normalized)} issues found")
+    }
 
     def get_anomaly_score(self) -> float:
         recent = self.review_history[-10:] if len(self.review_history) > 10 else self.review_history

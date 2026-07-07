@@ -5,30 +5,16 @@ import requests
 from dotenv import load_dotenv
 from openai import OpenAI as OpenAIBase
 from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Resource
 
 load_dotenv()
-
-resource = Resource(attributes={
-    "service.name": "mera-mirror-agent",
-    "service.version": "1.0.0",
-    "mirror.role": "observer"
-})
-provider = TracerProvider(resource=resource)
-endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
-exporter = OTLPSpanExporter(endpoint=f"{endpoint}/v1/traces", timeout=1)
-provider.add_span_processor(BatchSpanProcessor(exporter, schedule_delay_millis=5000, max_queue_size=1024))
-trace.set_tracer_provider(provider)
-
-tracer = trace.get_tracer(__name__)
+from signoz_config.tracing import get_tracer
+tracer = get_tracer("mera-mirror-agent")
 
 
 class MirrorAgent:
     def __init__(self):
-        self.mcp_url = os.getenv("SIGNOZ_MCP_URL", "http://localhost:8080/mcp")
+        self.mcp_url = os.getenv("SIGNOZ_MCP_URL", "http://localhost:8000/mcp")
+        self.api_key = os.getenv("SIGNOZ_API_KEY", "")
         ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434/v1")
         self.model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
         self.client = OpenAIBase(base_url=ollama_url, api_key="ollama")
@@ -36,11 +22,12 @@ class MirrorAgent:
 
     def _mcp_call(self, method: str, params: dict, req_id: int = 1) -> dict:
         payload = {"jsonrpc": "2.0", "method": method, "params": params, "id": req_id}
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["SIGNOZ-API-KEY"] = self.api_key
         for attempt in range(3):
             try:
-                resp = requests.post(self.mcp_url, json=payload, headers={
-                    "Content-Type": "application/json"
-                }, timeout=10)
+                resp = requests.post(self.mcp_url, json=payload, headers=headers, timeout=10)
                 if resp.status_code == 200:
                     return resp.json().get("result", {})
                 elif attempt < 2:

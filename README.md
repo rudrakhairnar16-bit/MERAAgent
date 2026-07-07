@@ -153,7 +153,20 @@ Verify: `docker ps` should show all 7 containers healthy.
 2. Complete the first-time signup form
 3. Import dashboard: Dashboards → Import JSON → `dashboards/mera_dashboard.json`
 
-### Step 6: Run MERA
+### Step 6: Generate SigNoz API Key (for MCP features)
+
+1. Open http://localhost:8080 → Settings → API Keys
+2. Click **+ New Key** → give it a name (e.g. "mera") → **Create**
+3. Copy the generated key
+4. Add it to `Track_3/.env`:
+   ```
+   SIGNOZ_API_KEY=your-generated-key-here
+   ```
+
+Without this key, the Mirror Agent can't query traces via MCP (it will show 0 traces).  
+The Main Agent (code review + OTel traces) works independently.
+
+### Step 7: Run MERA
 
 ```powershell
 pip install rich   # only needed once
@@ -185,7 +198,7 @@ The orchestrator will:
 
 If `rich` is not installed, it falls back to the standard console output automatically.
 
-### Step 7: Launch the Web Dashboard (Optional)
+### Step 8: Launch the Web Dashboard (Optional)
 
 In a **second terminal**:
 
@@ -196,7 +209,7 @@ python -m uvicorn dashboard.app:app --host 0.0.0.0 --port 9000
 
 Then open http://localhost:9000 to see live cycle data, anomalies, and fixes.
 
-### Step 8: View SigNoz Results
+### Step 9: View SigNoz Results
 
 - **Traces:** http://localhost:8080 → Traces
 - **Dashboard:** http://localhost:8080 → Dashboards → MERA Dashboard
