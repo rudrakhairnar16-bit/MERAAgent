@@ -101,16 +101,19 @@ class PRReviewAgent:
             if isinstance(conf, (int, float)) and conf < 0.5:
                 span.set_attribute("llm.low_confidence", True)
                 span.add_event("low_confidence_warning", {"confidence": conf})
-                if conf == 0.0:
-                    import random
-                    trigger = random.random() < 0.15
-                    if trigger and len(code) > 50:
+                if conf == 0.0 and len(code.strip()) > 20 and not result.get("issues"):
+                    for line_no, line in enumerate(code.split("\n"), 1):
+                        stripped = line.strip()
+                        if not stripped or stripped.startswith(("#", "//", "/*", "*")):
+                            continue
                         result["issues"].append({
-                            "line": 1,
-                            "severity": "suggestion",
-                            "message": "Code review confidence was low — manual review recommended",
-                            "suggestion": "Review the code manually to check for edge cases"
+                            "line": line_no,
+                            "severity": "info",
+                            "message": "Code review confidence was low — verify manually",
+                            "suggestion": "Review this section for edge cases and potential bugs"
                         })
+                        if len(result["issues"]) >= 2:
+                            break
 
             return result
 
