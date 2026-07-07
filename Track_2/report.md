@@ -23,6 +23,16 @@
 
 ---
 
+### Track 2 Prize
+
+> **Apple iPad** (one per team member, or equivalent cash amount)
+>
+> Maximum team size: 4 → **4 iPads total**
+>
+> Plus eligibility for AWS credits ($5K/$3K/$2K for top 3 overall)
+
+---
+
 ## 1. Kyu (Why) — The Problem & Motivation
 
 ### The Problem

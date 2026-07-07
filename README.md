@@ -155,6 +155,10 @@ Verify: `docker ps` should show all 7 containers healthy.
 
 ### Step 6: Generate SigNoz API Key (for MCP features)
 
+Without this key, the Mirror Agent uses **simulated traces** for the demo (anomaly detection + fixes still work).
+
+To get real traces:
+
 1. Open http://localhost:8080 → Settings → API Keys
 2. Click **+ New Key** → give it a name (e.g. "mera") → **Create**
 3. Copy the generated key
@@ -163,8 +167,11 @@ Verify: `docker ps` should show all 7 containers healthy.
    SIGNOZ_API_KEY=your-generated-key-here
    ```
 
-Without this key, the Mirror Agent can't query traces via MCP (it will show 0 traces).  
-The Main Agent (code review + OTel traces) works independently.
+Or run the automated setup script (creates key directly in database):
+```powershell
+cd Track_3
+python scripts/setup_api_key.py
+```
 
 ### Step 7: Run MERA
 
@@ -197,6 +204,17 @@ The orchestrator will:
 - Press **Ctrl+C** to stop
 
 If `rich` is not installed, it falls back to the standard console output automatically.
+
+**No SigNoz API key? No problem.** The Mirror Agent auto-detects when MCP is unavailable and uses simulated traces for the demo — anomaly detection and fix generation work seamlessly.
+
+### Record a Demo Video
+
+```powershell
+cd Track_3
+python scripts/record_demo.py
+```
+
+This runs the full pipeline with timestamped output and on-screen prompts — just start your screen recorder and follow along.
 
 ### Step 8: Launch the Web Dashboard (Optional)
 

@@ -42,6 +42,30 @@ class MirrorAgent:
                 continue
         return {"error": f"MCP call failed after 3 attempts: {method}"}
 
+    def _get_simulated_traces(self, service: str = "mera-main-agent", limit: int = 10) -> list:
+        traces = []
+        import random
+        for i in range(limit):
+            trace_id = f"sim-{i}-{random.randint(10000,99999)}"
+            span_count = random.randint(1, 4)
+            spans = []
+            for j in range(span_count):
+                lat = random.choice([200, 500, 3000, 7000, 15000, 100])
+                spans.append({
+                    "span_id": f"s{i}-{j}",
+                    "name": random.choice(["pr_review", "llm_call", "code_analysis", "format_check"]),
+                    "duration_ms": lat,
+                    "attributes": {
+                        "code.language": random.choice(["python", "javascript", "go"]),
+                        "code.length": str(random.randint(100, 2000)),
+                        "review.issues_count": str(random.randint(0, 5)),
+                        "llm.low_confidence": "true" if random.random() < 0.3 else "false",
+                        "llm.latency_ms": str(lat)
+                    }
+                })
+            traces.append({"trace_id": trace_id, "spans": spans, "service_name": service})
+        return traces
+
     def query_recent_traces(self, service: str = "mera-main-agent", limit: int = 10) -> list:
         with tracer.start_as_current_span("mirror.query_traces") as span:
             span.set_attribute("mirror.query_type", "recent_traces")
@@ -181,6 +205,11 @@ def run_self_healing_cycle() -> list:
     with tracer.start_as_current_span("self_healing_cycle") as span:
         traces = mirror.query_recent_traces(limit=15)
         alerts = mirror.query_alerts()
+        use_simulated = False
+        if not traces and not alerts:
+            print("  ⚠ MCP returned no data — using simulated traces for demo")
+            traces = mirror._get_simulated_traces(limit=10)
+            use_simulated = True
         anomalies = mirror.analyze_trace_anomalies(traces)
         print(f"  Traces: {len(traces)} | Alerts: {len(alerts)} | Anomalies: {len(anomalies)}")
         for a in anomalies:
@@ -192,6 +221,7 @@ def run_self_healing_cycle() -> list:
             print("  Dashboard + alerts created/updated")
         span.set_attribute("cycle.anomalies", len(anomalies))
         span.set_attribute("cycle.alerts_present", len(alerts))
+        span.set_attribute("mirror.simulated_mode", use_simulated)
     print("[Mirror Agent] Cycle complete.\n")
     return anomalies
 
