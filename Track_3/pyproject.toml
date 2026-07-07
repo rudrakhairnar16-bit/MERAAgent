@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+markers = [
+    "llm: tests that require Ollama running (skipped in CI)",
+]
+testpaths = ["tests"]
+pythonpath = ["."]
