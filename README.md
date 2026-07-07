@@ -59,9 +59,10 @@ Main Agent ----OTel----> SigNoz <----MCP---- Mirror Agent
 - Python — agent runtime
 
 **Extras**
-- FastAPI web dashboard — live cycle monitoring
-- GitHub Actions CI — automated testing
-- Retry logic — resilient agent operations
+- **Live Terminal Dashboard** (`rich`) — full-screen real-time UI with spinners, progress bars, color-coded anomalies
+- FastAPI web dashboard — live cycle monitoring at http://localhost:9000
+- GitHub Actions CI — automated testing on push
+- Retry logic — resilient agent operations (3 attempts with backoff)
 
 ---
 
@@ -73,7 +74,9 @@ MERAAgent/
 │   ├── main_agent/agent.py      # PR Reviewer with OTel
 │   ├── mirror_agent/mirror.py   # Observer + auto-healer
 │   ├── dashboard/app.py         # FastAPI web dashboard
+│   ├── dashboard/cli.py         # Live terminal UI (rich)
 │   ├── dashboard/templates/     # HTML dashboard UI
+│   ├── state.py                 # Shared state (JSON file)
 │   ├── state.py                 # Shared state (JSON file)
 │   ├── signoz_config/           # OTel collector config
 │   ├── dashboards/              # SigNoz dashboard template
@@ -153,14 +156,34 @@ Verify: `docker ps` should show all 7 containers healthy.
 ### Step 6: Run MERA
 
 ```powershell
+pip install rich   # only needed once
 python run.py
+```
+
+This launches a **live terminal dashboard** — a full-screen real-time UI showing:
+
+```
+┌─ Main Agent ─────────────┐  ┌─ Mirror Agent ────────────┐
+│ Status    reviewing...    │  │ Cycle     2/3             │
+│ Language  javascript      │  │ Traces    5               │
+│ Issues    3               │  │ Anomalies 2               │
+│ Confidence 0.82           │  │ Fixes     2               │
+└───────────────────────────┘  └───────────────────────────┘
+
+┌─ Recent Anomalies ────────┐  ┌─ Progress ───────────────┐
+│ high_latency ⚠️  Span..    │  │ Self-Healing Cycles      │
+│ low_confidence 🔴 Low..   │  │ ████████░░ 67%           │
+└───────────────────────────┘  └───────────────────────────┘
 ```
 
 The orchestrator will:
 - Submit 3 code samples to the Main Agent for review
 - The Main Agent sends traces to SigNoz via OTel
 - The Mirror Agent queries SigNoz MCP, detects anomalies, and generates fixes
-- Each cycle writes results to the dashboard state file
+- Each cycle updates the live dashboard in real-time
+- Press **Ctrl+C** to stop
+
+If `rich` is not installed, it falls back to the standard console output automatically.
 
 ### Step 7: Launch the Web Dashboard (Optional)
 
@@ -185,12 +208,13 @@ Then open http://localhost:9000 to see live cycle data, anomalies, and fixes.
 
 | Component | Description |
 |---|---|
-| MERA Dashboard | http://localhost:9000 — FastAPI dashboard with cycle stats, anomalies, fixes |
-| SigNoz Traces | http://localhost:8080 — OTel-instrumented agent spans |
-| SigNoz Dashboard | 8-panel dashboard with latency, confidence, anomaly tracking |
-| SigNoz Alerts | 3 alert rules: latency, confidence, anomaly count |
+| **Terminal Dashboard** | Full-screen live UI — spinners, progress bars, color-coded anomaly table |
+| **Web Dashboard** | http://localhost:9000 — FastAPI dashboard with cycle stats, anomalies, fixes |
+| **SigNoz Traces** | http://localhost:8080 — OTel-instrumented agent spans |
+| **SigNoz Dashboard** | 8-panel dashboard with latency, confidence, anomaly tracking |
+| **SigNoz Alerts** | 3 alert rules: latency, confidence, anomaly count |
 
-*(Add screenshots to `docs/screenshots/` and link them here)*
+*(Add screenshots/video to `docs/screenshots/` and link them here. The terminal dashboard looks great in a demo recording!)*
 
 ---
 
