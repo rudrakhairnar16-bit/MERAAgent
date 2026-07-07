@@ -25,6 +25,22 @@ trace.set_tracer_provider(provider)
 tracer = trace.get_tracer(__name__)
 
 
+def retry(max_attempts=3, delay=1.0):
+    def decorator(fn):
+        def wrapper(*args, **kwargs):
+            last_exc = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return fn(*args, **kwargs)
+                except Exception as e:
+                    last_exc = e
+                    if attempt < max_attempts:
+                        time.sleep(delay * attempt)
+            raise last_exc
+        return wrapper
+    return decorator
+
+
 class PRReviewAgent:
     def __init__(self, model: str = ""):
         ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434/v1")
@@ -61,6 +77,7 @@ class PRReviewAgent:
             })
             return review
 
+    @retry(max_attempts=3, delay=1.0)
     def _call_llm_for_review(self, code: str, language: str) -> dict:
         with tracer.start_as_current_span("llm_call") as span:
             span.set_attribute("llm.call_type", "review_generation")
@@ -81,7 +98,8 @@ class PRReviewAgent:
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.1,
-                    max_tokens=2048
+                    max_tokens=2048,
+                    timeout=30
                 )
                 content = response.choices[0].message.content.strip()
                 span.set_attribute("llm.response_length", len(content))
@@ -101,7 +119,8 @@ class PRReviewAgent:
 
             return result
 
-    def _try_parse_json(self, text: str) -> dict | None:
+    @staticmethod
+    def _try_parse_json(text: str) -> dict | None:
         import re
         for attempt in [text.strip(), text.strip().strip("`"), text.strip().strip("`").strip("json")]:
             if attempt.startswith("{"):

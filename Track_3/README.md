@@ -38,7 +38,7 @@ pip install -r requirements.txt
 python run.py
 ```
 
-Open http://localhost:3301 to see traces in SigNoz.
+Open http://localhost:9000 for the MERA web dashboard or http://localhost:8080 for SigNoz.
 
 ## Deployment Options
 

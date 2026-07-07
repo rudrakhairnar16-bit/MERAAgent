@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from main_agent.agent import PRReviewAgent
 from mirror_agent.mirror import run_self_healing_cycle
+from state import append_cycle, append_review, append_anomalies, append_fixes, update_alerts
 
 load_dotenv()
 
@@ -73,8 +74,19 @@ def run_main_agent_loop(agent, stop):
     while not stop.is_set():
         s = SAMPLE_CODES[cycle % len(SAMPLE_CODES)]
         print(f"[Main] Reviewing {s['language']} (cycle {cycle+1})...")
-        r = agent.review_code(s["code"], s["language"])
-        print(f"  Issues: {len(r.get('issues',[]))} | Confidence: {r.get('confidence',0):.2f}")
+        try:
+            r = agent.review_code(s["code"], s["language"])
+            print(f"  Issues: {len(r.get('issues',[]))} | Confidence: {r.get('confidence',0):.2f}")
+            append_review({
+                "cycle": cycle,
+                "language": s["language"],
+                "issues_count": len(r.get("issues", [])),
+                "confidence": r.get("confidence", 0),
+                "summary": r.get("summary", ""),
+                "timestamp": time.time()
+            })
+        except Exception as e:
+            print(f"  Error: {e}")
         cycle += 1
         for _ in range(30):
             if stop.is_set():
@@ -99,15 +111,38 @@ def main():
 
     for i in range(3):
         print(f"\n{'='*55}\n  Self-Healing Cycle {i+1}/3\n{'='*55}")
-        anomalies = run_self_healing_cycle()
-        if not anomalies:
-            print("  System healthy - no anomalies")
+        try:
+            anomalies = run_self_healing_cycle()
+            if anomalies:
+                append_anomalies(anomalies)
+                fixes = []
+                from mirror_agent.mirror import MirrorAgent
+                m = MirrorAgent()
+                for a in anomalies:
+                    fix = m.generate_fix_suggestion(a)
+                    fixes.append(fix)
+                append_fixes(fixes)
+                print(f"  {len(fixes)} fixes generated")
+            else:
+                print("  System healthy - no anomalies")
+            append_cycle({
+                "cycle": i + 1,
+                "anomalies": len(anomalies or []),
+                "fixes": len(anomalies or []),
+                "traces": len(anomalies or []),
+                "alerts": 0,
+                "timestamp": time.time()
+            })
+        except Exception as e:
+            print(f"  Cycle error: {e}")
+            append_cycle({"cycle": i + 1, "error": str(e), "timestamp": time.time()})
         time.sleep(8)
 
     stop.set()
     print("\n" + "=" * 55)
     print("  Demo Complete - 3 Cycles Executed")
-    print("  Check SigNoz at http://localhost:3301")
+    print("  Dashboard: http://localhost:9000")
+    print("  SigNoz:    http://localhost:8080")
     print("=" * 55)
 
 

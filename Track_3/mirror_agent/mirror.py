@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import requests
 from dotenv import load_dotenv
 from openai import OpenAI as OpenAIBase
@@ -35,13 +36,24 @@ class MirrorAgent:
 
     def _mcp_call(self, method: str, params: dict, req_id: int = 1) -> dict:
         payload = {"jsonrpc": "2.0", "method": method, "params": params, "id": req_id}
-        try:
-            resp = requests.post(self.mcp_url, json=payload, headers={
-                "Content-Type": "application/json"
-            }, timeout=10)
-            return resp.json().get("result", {})
-        except Exception as e:
-            return {"error": str(e)}
+        for attempt in range(3):
+            try:
+                resp = requests.post(self.mcp_url, json=payload, headers={
+                    "Content-Type": "application/json"
+                }, timeout=10)
+                if resp.status_code == 200:
+                    return resp.json().get("result", {})
+                elif attempt < 2:
+                    time.sleep(1 * (attempt + 1))
+            except requests.ConnectionError:
+                if attempt < 2:
+                    time.sleep(2 * (attempt + 1))
+                continue
+            except Exception as e:
+                if attempt < 2:
+                    time.sleep(1)
+                continue
+        return {"error": f"MCP call failed after 3 attempts: {method}"}
 
     def query_recent_traces(self, service: str = "mera-main-agent", limit: int = 10) -> list:
         with tracer.start_as_current_span("mirror.query_traces") as span:

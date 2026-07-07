@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MERA Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
+    h1 { font-size: 28px; margin-bottom: 4px; }
+    .subtitle { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
+    .card h3 { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .card .value { font-size: 32px; font-weight: 700; }
+    .card .value.green { color: #22c55e; }
+    .card .value.yellow { color: #eab308; }
+    .card .value.red { color: #ef4444; }
+    .card .value.blue { color: #3b82f6; }
+    .cycle { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .cycle h4 { font-size: 16px; margin-bottom: 8px; }
+    .cycle .meta { color: #94a3b8; font-size: 13px; margin-bottom: 8px; }
+    .anomaly { border-left: 3px solid #ef4444; padding-left: 12px; margin: 8px 0; font-size: 14px; }
+    .anomaly .type { font-weight: 600; color: #f87171; }
+    .anomaly .sev { font-size: 12px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+    .sev.critical { background: #7f1d1d; color: #fca5a5; }
+    .sev.warning { background: #713f12; color: #fde68a; }
+    .sev.suggestion { background: #1e3a5f; color: #93c5fd; }
+    .fix { border-left: 3px solid #22c55e; padding-left: 12px; margin: 8px 0; font-size: 14px; }
+    .review { border-left: 3px solid #3b82f6; padding-left: 12px; margin: 8px 0; font-size: 14px; }
+    a { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
+    .badge.running { background: #14532d; color: #86efac; }
+    .badge.idle { background: #1e3a5f; color: #93c5fd; }
+    .badge.error { background: #7f1d1d; color: #fca5a5; }
+    .empty { color: #64748b; font-style: italic; padding: 16px 0; }
+    .links { margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .links a { background: #1e293b; border: 1px solid #334155; padding: 10px 20px; border-radius: 8px; font-size: 14px; }
+    .table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+    .table th { text-align: left; color: #94a3b8; padding: 8px 12px; border-bottom: 1px solid #334155; font-weight: 600; }
+    .table td { padding: 8px 12px; border-bottom: 1px solid #1e293b; }
+    @media (max-width: 600px) { body { padding: 12px; } .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>MERA Dashboard</h1>
+  <div class="subtitle">Mirror Entity Recursive Agent — Self-Healing AI System</div>
+
+  {% set cycles = state.get("cycles", []) %}
+  {% set anomalies = state.get("anomalies", []) %}
+  {% set reviews = state.get("reviews", []) %}
+  {% set fixes = state.get("fixes", []) %}
+  {% set active_anomalies = anomalies | selectattr("resolved", "undefined") | list %}
+  {% set status = state.get("status", "idle") %}
+
+  <div class="badge {{ status.split()[0] | lower }}">{{ status }}</div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Cycles Completed</h3>
+      <div class="value blue">{{ cycles | length }}</div>
+    </div>
+    <div class="card">
+      <h3>Code Reviews</h3>
+      <div class="value blue">{{ reviews | length }}</div>
+    </div>
+    <div class="card">
+      <h3>Anomalies Detected</h3>
+      <div class="value {% if anomalies | length == 0 %}green{% elif anomalies | length > 10 %}red{% else %}yellow{% endif %}">{{ anomalies | length }}</div>
+    </div>
+    <div class="card">
+      <h3>Fixes Generated</h3>
+      <div class="value green">{{ fixes | length }}</div>
+    </div>
+  </div>
+
+  {% if cycles %}
+  <h2>Recent Cycles</h2>
+  {% for c in cycles %}
+  <div class="cycle">
+    <h4>Cycle {{ loop.index }}</h4>
+    <div class="meta">{{ c.get("timestamp", "N/A") }}</div>
+    {% if c.get("anomalies") %}
+      <p>{{ c["anomalies"] }} anomalies · {{ c.get("fixes", 0) }} fixes</p>
+    {% endif %}
+    {% if c.get("traces") is not none %}
+      <p>Traces: {{ c["traces"] }} · Alerts: {{ c.get("alerts", 0) }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty">No cycles yet. Run <code>python run.py</code> to start.</div>
+  {% endif %}
+
+  {% if anomalies %}
+  <h2>Anomalies</h2>
+  {% for a in anomalies %}
+  <div class="anomaly">
+    <span class="type">{{ a.get("type", "unknown") }}</span>
+    <span class="sev {{ a.get("severity", "warning") }}">{{ a.get("severity", "warning") }}</span>
+    <p>{{ a.get("message", "") }}</p>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if fixes %}
+  <h2>Fixes Applied</h2>
+  {% for f in fixes %}
+  <div class="fix">
+    <strong>{{ f.get("action", "fix") }}</strong> ({{ f.get("priority", "low") }})
+    <p>{{ f.get("fix", "") }}</p>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  <div class="links">
+    <a href="http://localhost:8080" target="_blank">SigNoz UI</a>
+    <a href="/api/status" target="_blank">API Status</a>
+    <a href="/api/cycles" target="_blank">API Cycles</a>
+    <a href="/api/anomalies" target="_blank">API Anomalies</a>
+  </div>
+
+  <p style="margin-top: 32px; font-size: 12px; color: #475569;">
+    MERA v1.0.0 — <a href="https://github.com/rudrakhairnar16-bit/MERAAgent" target="_blank">GitHub</a>
+  </p>
+</body>
+</html>
