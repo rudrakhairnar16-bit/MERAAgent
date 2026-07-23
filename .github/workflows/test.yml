@@ -27,20 +27,7 @@ jobs:
       - name: Verify imports
         working-directory: Track_3
         run: |
-          python -c "
-import sys
-sys.path.insert(0, '.')
-print('Importing mirror_agent.detector...', end=' ')
-from mirror_agent.detector import AdaptiveDetector, MetricWindow
-print('OK')
-print('Importing mirror_agent.healer...', end=' ')
-from mirror_agent.healer import ActionExecutor
-print('OK')
-print('Importing state...', end=' ')
-from state import get_state, append_cycle, save_state
-print('OK')
-print('All imports OK')
-"
+          python -c "import sys; sys.path.insert(0, '.'); print('Importing mirror_agent.detector...', end=' '); from mirror_agent.detector import AdaptiveDetector, MetricWindow; print('OK'); print('Importing mirror_agent.healer...', end=' '); from mirror_agent.healer import ActionExecutor; print('OK'); print('Importing state...', end=' '); from state import get_state, append_cycle, save_state; print('OK'); print('All imports OK')"
 
       - name: Run non-LLM tests
         working-directory: Track_3
