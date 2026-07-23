@@ -235,6 +235,18 @@ Then open http://localhost:9000 to see live cycle data, anomalies, and fixes.
 
 ---
 
+## Screenshots
+
+| Component | Screenshot |
+|---|---|
+| **Terminal Dashboard** | ![Terminal Dashboard](https://raw.githubusercontent.com/rudrakhairnar16-bit/MERAAgent/main/Track_3/screenshots/01_terminal_dashboard.png) |
+| **Web Dashboard** | ![Web Dashboard](https://raw.githubusercontent.com/rudrakhairnar16-bit/MERAAgent/main/Track_3/screenshots/02_web_dashboard.png) |
+| **Improvement Metrics** | ![Improvement Metrics](https://raw.githubusercontent.com/rudrakhairnar16-bit/MERAAgent/main/Track_3/screenshots/03_improvement_table.png) |
+| **Summary Panel** | ![Summary Panel](https://raw.githubusercontent.com/rudrakhairnar16-bit/MERAAgent/main/Track_3/screenshots/04_terminal_summary.png) |
+| **Code Structure** | ![Code Structure](https://raw.githubusercontent.com/rudrakhairnar16-bit/MERAAgent/main/Track_3/screenshots/05_code_structure.png) |
+
+---
+
 ## SigNoz Features Used
 
 | Feature | Usage |
