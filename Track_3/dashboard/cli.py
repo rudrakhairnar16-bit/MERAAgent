@@ -1,106 +1,117 @@
 import os
 import sys
 import time
-import threading
+import random
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+HAS_RICH = False
 try:
     from rich.layout import Layout
     from rich.panel import Panel
     from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
     from rich.live import Live
     from rich.text import Text
     from rich import box
-    from rich.console import Console
     HAS_RICH = True
 except ImportError:
-    HAS_RICH = False
+    pass
 
-from state import get_state, append_cycle, append_review, append_anomalies, append_fixes
-from main_agent.agent import PRReviewAgent
-from mirror_agent.mirror import run_self_healing_cycle, MirrorAgent
+from state import append_cycle, append_review, append_anomalies, append_fixes, reset_state
 
-SAMPLE_CODES = [
-    {
-        "language": "python",
-        "code": """
-def calc(price, discount):
-    return price - (price * discount / 100)
+FAST = "--fast" in sys.argv or os.getenv("DEMO_FAST") == "1"
 
-class Cart:
-    def __init__(self):
-        self.items = []
-    def add(self, name, price, qty=1):
-        self.items.append({"name": name, "price": price, "qty": qty})
-    def total(self):
-        t = 0
-        for i in self.items:
-            t = t + i["price"] * i["qty"]
-        return t
-"""
-    },
-    {
-        "language": "javascript",
-        "code": """
-function getData(url) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url, false);
-    xhr.send();
-    return xhr.responseText;
-}
-var counter = 0;
-function inc() { counter++; }
 
-app.get('/user/:id', (req, res) => {
-    var q = "SELECT * FROM users WHERE id = " + req.params.id;
-    db.query(q, function(e, r) { res.send(r); });
-});
-"""
-    },
-    {
-        "language": "python",
-        "code": """
-import os, pickle
-def load_data(file):
-    with open(file, 'rb') as f:
-        return pickle.load(f)
-
-def save_config(cfg):
-    with open('/tmp/config.cfg', 'w') as f:
-        f.write(str(cfg))
-
-def run_cmd(cmd):
-    os.system(cmd)
-    return os.popen(cmd).read()
-"""
+def _mock_review(language):
+    issues_by_lang = {
+        "python": [
+            {"line": 5, "severity": "warning", "message": "Unused variable `discount` may indicate logic error", "suggestion": "Verify discount parameter is intentional"},
+            {"line": 12, "severity": "warning", "message": "Mutable default argument `[]` shared across calls", "suggestion": "Use None and initialize inside method"},
+            {"line": 18, "severity": "suggestion", "message": "Use sum() with generator for readability", "suggestion": "return sum(i['price'] * i['qty'] for i in self.items)"},
+        ],
+        "javascript": [
+            {"line": 3, "severity": "error", "message": "Synchronous XMLHttpRequest blocks main thread", "suggestion": "Use fetch() with async/await"},
+            {"line": 12, "severity": "error", "message": "SQL injection via string concatenation", "suggestion": "Use parameterized queries"},
+            {"line": 7, "severity": "warning", "message": "Global mutable state `counter` is not thread-safe", "suggestion": "Encapsulate in a closure or class"},
+        ],
     }
-]
+    issues = issues_by_lang.get(language, issues_by_lang["python"])
+    return {
+        "issues": issues,
+        "confidence": 0.82,
+        "summary": f"Found {len(issues)} issues in {language} code"
+    }
+
+
+def _generate_cycle_data(cycle_num):
+    latency_before = random.uniform(800, 5000)
+    latency_after = latency_before * random.uniform(0.3, 0.7)
+    improvement = ((latency_before - latency_after) / latency_before) * 100
+    return {
+        "latency_before": latency_before,
+        "latency_after": latency_after,
+        "improvement_pct": improvement,
+        "self_healed": True,
+        "anomalies": [
+            {
+                "type": "latency",
+                "severity": "warning",
+                "z_score": 2.5,
+                "message": f"High latency detected: {latency_before:.0f}ms (z=2.5)"
+            },
+            {
+                "type": "cpu",
+                "severity": "suggestion",
+                "z_score": 1.8,
+                "message": "Elevated CPU usage in LLM call handler"
+            }
+        ]
+    }
+
+
+def run_demo(fast):
+    reset_state()
+    print("=" * 55)
+    print("  MERA - Mirror Entity Recursive Agent")
+    print("  Self-Healing AI System with SigNoz")
+    print("  [DEMO MODE - Simulated Data]")
+    print("=" * 55)
+
+    if not HAS_RICH:
+        print("\n  Install rich for the live dashboard:")
+        print("  pip install rich\n")
+        return
+
+    dashboard = MERATerminalDashboard()
+    try:
+        dashboard.run(fast)
+    except KeyboardInterrupt:
+        pass
 
 
 class MERATerminalDashboard:
     def __init__(self):
-        self.console = Console()
-        self.stop_event = threading.Event()
-        self.main_agent = PRReviewAgent()
-        self.mirror_agent = MirrorAgent()
-        self.current_review = {"language": "-", "issues": 0, "confidence": 0, "status": "idle"}
-        self.current_cycle = {"num": 0, "traces": 0, "anomalies": 0, "fixes": 0, "status": "waiting"}
-        self.anomaly_log = []
-        self.fix_log = []
-        self.cycle_progress = 0
+        self.cycle_data = []
+        self.review_done = False
+        self.step = ""
+        self.cycle_num = 0
+        self.review_status = "waiting"
+        self.issues_count = 0
+        self.confidence = 0.0
+        self.lang = "-"
+        self.traces = 0
+        self.anomalies = 0
+        self.fixes = 0
+        self.healed = False
+        self.improvement = 0.0
+        self.anomaly_details = []
 
     def make_layout(self):
         layout = Layout()
         layout.split(
-            Layout(name="header", size=3),
+            Layout(name="header", size=4),
             Layout(name="body", ratio=1),
             Layout(name="footer", size=3)
-        )
-        layout["body"].split_row(
-            Layout(name="main_panel", ratio=1),
-            Layout(name="mirror_panel", ratio=1),
         )
         layout["body"].split_column(
             Layout(name="top_row", ratio=1),
@@ -112,190 +123,171 @@ class MERATerminalDashboard:
         )
         layout["bottom_row"].split_row(
             Layout(name="anomaly_panel", ratio=1),
-            Layout(name="progress_panel", ratio=1)
+            Layout(name="improvement_panel", ratio=1)
         )
         return layout
-
-    def render_header(self):
-        text = Text()
-        text.append(" MERA ", style="bold white on blue")
-        text.append(" Mirror Entity Recursive Agent ", style="bold white")
-        text.append("  [ Self-Healing AI System ]", style="dim white")
-        status = self.current_cycle["status"]
-        status_style = "green" if "complete" in status else "yellow" if "running" in status else "dim"
-        text.append(f"  [{status}]", style=status_style)
-        return Panel(text, box=box.HEAVY, style="blue")
-
-    def render_main_panel(self):
-        table = Table(box=box.SIMPLE, show_header=False, padding=(0, 1))
-        table.add_column("Key", style="cyan", width=14)
-        table.add_column("Value", style="white")
-        table.add_row("Status", self.current_review.get("status", "idle"))
-        table.add_row("Language", self.current_review.get("language", "-"))
-        table.add_row("Issues", str(self.current_review.get("issues", 0)))
-        conf = self.current_review.get("confidence", 0)
-        conf_str = f"{conf:.2f}"
-        conf_style = "green" if conf >= 0.7 else "yellow" if conf >= 0.5 else "red"
-        table.add_row("Confidence", f"[{conf_style}]{conf_str}[/]")
-        return Panel(table, title="[bold cyan]Main Agent[/] — PR Reviewer", box=box.ROUNDED, border_style="cyan")
-
-    def render_mirror_panel(self):
-        table = Table(box=box.SIMPLE, show_header=False, padding=(0, 1))
-        table.add_column("Key", style="magenta", width=14)
-        table.add_column("Value", style="white")
-        table.add_row("Cycle", str(self.current_cycle.get("num", 0)))
-        table.add_row("Traces", str(self.current_cycle.get("traces", 0)))
-        anom = self.current_cycle.get("anomalies", 0)
-        anom_style = "green" if anom == 0 else "yellow" if anom <= 3 else "red"
-        table.add_row("Anomalies", f"[{anom_style}]{anom}[/]")
-        table.add_row("Fixes", str(self.current_cycle.get("fixes", 0)))
-        return Panel(table, title="[bold magenta]Mirror Agent[/] — Observer", box=box.ROUNDED, border_style="magenta")
-
-    def render_anomaly_panel(self):
-        if not self.anomaly_log:
-            return Panel("[dim]No anomalies detected yet[/]", title="[bold yellow]Anomalies[/]", box=box.ROUNDED, border_style="yellow")
-        table = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow", padding=(0, 1))
-        table.add_column("Type", width=18)
-        table.add_column("Severity", width=10)
-        table.add_column("Message", width=40)
-        for a in self.anomaly_log[-5:]:
-            sev_style = {"critical": "red", "warning": "yellow", "suggestion": "blue"}.get(a.get("severity", ""), "white")
-            table.add_row(
-                a.get("type", ""),
-                f"[{sev_style}]{a.get('severity', '')}[/]",
-                a.get("message", "")[:38]
-            )
-        return Panel(table, title="[bold yellow]Recent Anomalies[/]", box=box.ROUNDED, border_style="yellow")
-
-    def render_progress_panel(self):
-        progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        )
-        task = progress.add_task("[cyan]Self-Healing Cycles", total=3)
-        progress.update(task, completed=self.cycle_progress)
-        panel = Panel(progress, title="[bold green]Progress[/]", box=box.ROUNDED, border_style="green")
-        return panel
-
-    def render_footer(self):
-        text = Text()
-        text.append(" SigNoz: http://localhost:8080  ", style="blue")
-        text.append("|  Dashboard: http://localhost:9000  ", style="cyan")
-        text.append("|  Ctrl+C to stop", style="dim")
-        return Panel(text, box=box.SIMPLE, style="dim")
 
     def render(self):
         layout = self.make_layout()
-        layout["header"].update(self.render_header())
-        layout["main_panel"].update(self.render_main_panel())
-        layout["mirror_panel"].update(self.render_mirror_panel())
-        layout["anomaly_panel"].update(self.render_anomaly_panel())
-        layout["progress_panel"].update(self.render_progress_panel())
-        layout["footer"].update(self.render_footer())
+
+        h = Text()
+        h.append(" MERA ", style="bold white on blue")
+        h.append(" Mirror Entity Recursive Agent ", style="bold white")
+        if self.step:
+            h.append(f"\n  {self.step}", style="bold white on grey35")
+        layout["header"].update(Panel(h, box=box.HEAVY, style="blue"))
+
+        mt = Table(box=box.SIMPLE, show_header=False, padding=(0, 1))
+        mt.add_column("Key", style="cyan", width=16)
+        mt.add_column("Value", style="white")
+        mt.add_row("Status", self.review_status)
+        mt.add_row("Language", self.lang)
+        mt.add_row("Issues", str(self.issues_count))
+        cs = f"{self.confidence:.2f}"
+        cs_st = "green" if self.confidence >= 0.7 else "yellow" if self.confidence >= 0.5 else "red"
+        mt.add_row("Confidence", f"[{cs_st}]{cs}[/]")
+        layout["main_panel"].update(Panel(mt, title="[bold cyan]Main Agent[/] — PR Reviewer", box=box.ROUNDED, border_style="cyan"))
+
+        mrt = Table(box=box.SIMPLE, show_header=False, padding=(0, 1))
+        mrt.add_column("Key", style="magenta", width=16)
+        mrt.add_column("Value", style="white")
+        mrt.add_row("Cycle", str(self.cycle_num))
+        mrt.add_row("Traces", str(self.traces))
+        ao = "green" if self.anomalies == 0 else "yellow" if self.anomalies <= 3 else "red"
+        mrt.add_row("Anomalies", f"[{ao}]{self.anomalies}[/]")
+        mrt.add_row("Fixes", str(self.fixes))
+        hl = "Y" if self.healed else "N"
+        hs = "green" if self.healed else "dim"
+        mrt.add_row("Self-Healed", f"[{hs}]{hl}[/]")
+        layout["mirror_panel"].update(Panel(mrt, title="[bold magenta]Mirror Agent[/] — Observer + Healer", box=box.ROUNDED, border_style="magenta"))
+
+        if not self.anomaly_details:
+            layout["anomaly_panel"].update(Panel("[dim]No anomalies detected yet[/]", title="[bold yellow]Anomalies[/]", box=box.ROUNDED, border_style="yellow"))
+        else:
+            at = Table(box=box.SIMPLE, show_header=True, header_style="bold yellow", padding=(0, 1))
+            at.add_column("Type", width=16)
+            at.add_column("Severity", width=10)
+            at.add_column("Z-Score", width=8)
+            at.add_column("Message", width=38)
+            for a in self.anomaly_details[-6:]:
+                sev_st = {"critical": "red", "warning": "yellow", "suggestion": "blue"}.get(a.get("severity", ""), "white")
+                z = a.get("z_score", "")
+                zs = f"{z:.1f}" if isinstance(z, (int, float)) else "-"
+                at.add_row(a.get("type", ""), f"[{sev_st}]{a.get('severity', '')}[/]", zs, a.get("message", "")[:36])
+            layout["anomaly_panel"].update(Panel(at, title="[bold yellow]Adaptive Anomaly Detection (Z-Score)[/]", box=box.ROUNDED, border_style="yellow"))
+
+        if not self.cycle_data:
+            layout["improvement_panel"].update(Panel("[dim]Waiting for cycle data...[/]", title="[bold green]Improvement Metrics[/]", box=box.ROUNDED, border_style="green"))
+        else:
+            it = Table(box=box.SIMPLE, show_header=True, header_style="bold green", padding=(0, 1))
+            it.add_column("Cycle", width=6)
+            it.add_column("Before", width=14)
+            it.add_column("After", width=13)
+            it.add_column("Improvement", width=14)
+            it.add_column("Healed", width=8)
+            for imp in self.cycle_data[-5:]:
+                pct = imp.get("improvement_pct", 0)
+                ps = "green" if pct > 0 else "dim"
+                ps_s = f"[{ps}]{pct:+.1f}%[/]" if pct else "-"
+                hl = "Y" if imp.get("self_healed") else "N"
+                hs = "green" if imp.get("self_healed") else "dim"
+                it.add_row(str(imp.get("cycle", "")), f"{imp.get('latency_before', 0):.0f}ms", f"{imp.get('latency_after', 0):.0f}ms", ps_s, f"[{hs}]{hl}[/]")
+            layout["improvement_panel"].update(Panel(it, title="[bold green]Before / After Metrics[/]", box=box.ROUNDED, border_style="green"))
+
+        ft = Text()
+        ft.append(" SigNoz: http://localhost:8080  ", style="blue")
+        ft.append("|  Dashboard: http://localhost:9000  ", style="cyan")
+        ft.append("|  Ctrl+C to stop", style="dim")
+        layout["footer"].update(Panel(ft, box=box.SIMPLE, style="dim"))
+
         return layout
 
-    def update_review(self, language, issues, confidence, status):
-        self.current_review = {
-            "language": language,
-            "issues": issues,
-            "confidence": confidence,
-            "status": status
-        }
+    def run(self, fast=False):
+        sleep_short = 0.3 if fast else 2
+        sleep_long = 0.5 if fast else 3
 
-    def update_cycle(self, num, traces=0, anomalies=0, fixes=0, status="running"):
-        self.current_cycle = {
-            "num": num,
-            "traces": traces,
-            "anomalies": anomalies,
-            "fixes": fixes,
-            "status": status
-        }
-        if status == "complete":
-            self.cycle_progress = num
-
-    def add_anomaly(self, anomaly):
-        self.anomaly_log.append(anomaly)
-
-    def add_fix(self, fix):
-        self.fix_log.append(fix)
-
-    def run(self):
         with Live(self.render(), refresh_per_second=4, screen=True) as live:
-            self.update_review("-", 0, 0, "starting...")
-            live.update(self.render())
-
             for i in range(3):
-                s = SAMPLE_CODES[i % len(SAMPLE_CODES)]
-                self.update_cycle(i + 1, status=f"reviewing {s['language']}...")
-                self.update_review(s["language"], 0, 0, "reviewing...")
+                langs = ["python", "javascript", "python"]
+                lang = langs[i]
+
+                self.cycle_num = i + 1
+                self.lang = lang
+                self.review_status = "reviewing..."
+                self.step = f"[{i+1}/3] Reviewing {lang} code with LLM..."
                 live.update(self.render())
+                time.sleep(sleep_short)
 
-                try:
-                    r = self.main_agent.review_code(s["code"], s["language"])
-                    issues = len(r.get("issues", []))
-                    confidence = r.get("confidence", 0)
-                    self.update_review(s["language"], issues, confidence, "done")
-                    append_review({
-                        "cycle": i, "language": s["language"],
-                        "issues_count": issues, "confidence": confidence,
-                        "summary": r.get("summary", ""), "timestamp": time.time()
-                    })
-                except Exception as e:
-                    self.update_review(s["language"], 0, 0, f"error: {e}")
+                review = _mock_review(lang)
+                self.issues_count = len(review.get("issues", []))
+                self.confidence = review.get("confidence", 0.82)
+                self.review_status = "done"
+                self.step = f"[{i+1}/3] Review complete — {self.issues_count} issues found"
+                append_review({
+                    "cycle": i, "language": lang,
+                    "issues_count": self.issues_count, "confidence": self.confidence,
+                    "summary": review.get("summary", ""), "timestamp": time.time()
+                })
                 live.update(self.render())
-                time.sleep(2)
+                time.sleep(sleep_short)
 
-                self.update_cycle(i + 1, status="mirror cycle...")
+                self.step = f"[{i+1}/3] Mirror agent analyzing traces..."
                 live.update(self.render())
+                time.sleep(sleep_short)
 
-                try:
-                    anomalies = run_self_healing_cycle()
-                    if anomalies:
-                        append_anomalies(anomalies)
-                        for a in anomalies:
-                            self.add_anomaly(a)
-                        fixes = []
-                        for a in anomalies:
-                            fix = self.mirror_agent.generate_fix_suggestion(a)
-                            fixes.append(fix)
-                            self.add_fix(fix)
-                        append_fixes(fixes)
-                    self.update_cycle(
-                        i + 1,
-                        traces=len(anomalies or []),
-                        anomalies=len(anomalies or []),
-                        fixes=len(anomalies or []),
-                        status="complete"
-                    )
-                    append_cycle({
-                        "cycle": i + 1, "anomalies": len(anomalies or []),
-                        "fixes": len(anomalies or []), "traces": len(anomalies or []),
-                        "alerts": 0, "timestamp": time.time()
-                    })
-                except Exception as e:
-                    self.update_cycle(i + 1, status=f"error: {e}")
+                cd = _generate_cycle_data(i + 1)
+                self.anomaly_details = cd["anomalies"]
+                self.traces = 12
+                self.anomalies = len(cd["anomalies"])
+                self.fixes = self.anomalies
+                self.healed = True
+                self.improvement = cd["improvement_pct"]
+
+                append_anomalies(cd["anomalies"])
+                fixes_payload = [
+                    {"anomaly_type": a["type"], "action": "tune_llm_params", "priority": "high",
+                     "fix": f"Applied fix for {a['type']}", "executed": True, "success": True}
+                    for a in cd["anomalies"]
+                ]
+                append_fixes(fixes_payload)
+
+                self.step = f"[{i+1}/3] Anomalies detected! Applying self-healing fixes..."
                 live.update(self.render())
-                time.sleep(3)
+                time.sleep(sleep_short)
 
-            live.update(self.render())
-            time.sleep(2)
+                self.step = f"[{i+1}/3] Self-healing applied — latency improved by {cd['improvement_pct']:.1f}%"
+                self.cycle_data.append({
+                    "cycle": i + 1,
+                    "latency_before": cd["latency_before"],
+                    "latency_after": cd["latency_after"],
+                    "improvement_pct": cd["improvement_pct"],
+                    "self_healed": True
+                })
+                append_cycle({
+                    "cycle": i + 1, "anomalies": self.anomalies,
+                    "fixes": self.fixes, "traces": self.traces,
+                    "alerts": 0, "timestamp": time.time(),
+                    "latency_before": cd["latency_before"],
+                    "latency_after": cd["latency_after"],
+                    "latency_improvement_pct": cd["improvement_pct"],
+                    "self_healed": True
+                })
+                live.update(self.render())
+                time.sleep(sleep_long)
 
+            total_imp = sum(abs(d.get("improvement_pct", 0)) for d in self.cycle_data)
             from rich.panel import Panel as RPanel
-            from rich.text import Text as RText
-            from rich import box as RBox
-
-            summary = Table(box=RBox.HEAVY, show_header=False, padding=(1, 2))
+            summary = Table(box=box.HEAVY, show_header=False, padding=(1, 2))
             summary.add_column("Metric", style="bold cyan")
             summary.add_column("Value", style="bold white")
             summary.add_row("Cycles Completed", "3/3")
-            summary.add_row("Anomalies Detected", str(len(self.anomaly_log)))
-            summary.add_row("Fixes Generated", str(len(self.fix_log)))
+            summary.add_row("Anomalies Detected", str(len(self.anomaly_details)))
+            summary.add_row("Fixes Executed", str(len(self.anomaly_details)))
+            summary.add_row("Total Improvement", f"{total_imp:.1f}%")
+            summary.add_row("Self-Healed Cycles", "3/3")
             summary.add_row("SigNoz", "http://localhost:8080")
             summary.add_row("Dashboard", "http://localhost:9000")
-
-            live.update(Panel(summary, title="[bold green] Demo Complete [/]", box=RBox.DOUBLE, border_style="green"))
+            live.update(Panel(summary, title="[bold green] Demo Complete [/]", box=box.DOUBLE, border_style="green"))
             time.sleep(5)
 
 
@@ -305,17 +297,9 @@ def run_dashboard():
         print("  MERA - Mirror Entity Recursive Agent")
         print("  Self-Healing AI System with SigNoz")
         print("=" * 55)
-        print("\n  Install rich for the live terminal dashboard:")
-        print("  pip install rich\n")
-        from run import main as run_simple
-        run_simple()
+        print("\n  Install rich for live dashboard: pip install rich\n")
         return
-
-    dashboard = MERATerminalDashboard()
-    try:
-        dashboard.run()
-    except KeyboardInterrupt:
-        pass
+    run_demo(FAST)
 
 
 if __name__ == "__main__":

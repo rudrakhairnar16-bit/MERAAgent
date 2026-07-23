@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-app = FastAPI(title="MERA Dashboard", version="1.0.0")
+app = FastAPI(title="MERA Dashboard", version="2.0.0")
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
@@ -38,6 +38,36 @@ async def api_cycles():
 async def api_anomalies():
     from state import get_state
     return JSONResponse(get_state().get("anomalies", []))
+
+
+@app.get("/api/fixes")
+async def api_fixes():
+    from state import get_state
+    return JSONResponse(get_state().get("fixes", []))
+
+
+@app.get("/api/baseline")
+async def api_baseline():
+    from state import get_state
+    return JSONResponse(get_state().get("baseline", {}))
+
+
+@app.get("/api/improvements")
+async def api_improvements():
+    from state import get_state
+    state = get_state()
+    cycles = state.get("cycles", [])
+    improvements = [
+        {
+            "cycle": c.get("cycle"),
+            "latency_before": c.get("latency_before", 0),
+            "latency_after": c.get("latency_after", 0),
+            "improvement_pct": c.get("latency_improvement_pct", 0),
+            "self_healed": c.get("self_healed", False)
+        }
+        for c in cycles if c.get("latency_before") or c.get("latency_after")
+    ]
+    return JSONResponse(improvements)
 
 
 @app.get("/health")

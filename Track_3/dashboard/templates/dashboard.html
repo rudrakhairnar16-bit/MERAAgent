@@ -4,125 +4,565 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MERA Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
-    h1 { font-size: 28px; margin-bottom: 4px; }
-    .subtitle { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
-    .card h3 { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-    .card .value { font-size: 32px; font-weight: 700; }
-    .card .value.green { color: #22c55e; }
-    .card .value.yellow { color: #eab308; }
-    .card .value.red { color: #ef4444; }
-    .card .value.blue { color: #3b82f6; }
-    .cycle { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-    .cycle h4 { font-size: 16px; margin-bottom: 8px; }
-    .cycle .meta { color: #94a3b8; font-size: 13px; margin-bottom: 8px; }
-    .anomaly { border-left: 3px solid #ef4444; padding-left: 12px; margin: 8px 0; font-size: 14px; }
-    .anomaly .type { font-weight: 600; color: #f87171; }
-    .anomaly .sev { font-size: 12px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
-    .sev.critical { background: #7f1d1d; color: #fca5a5; }
-    .sev.warning { background: #713f12; color: #fde68a; }
-    .sev.suggestion { background: #1e3a5f; color: #93c5fd; }
-    .fix { border-left: 3px solid #22c55e; padding-left: 12px; margin: 8px 0; font-size: 14px; }
-    .review { border-left: 3px solid #3b82f6; padding-left: 12px; margin: 8px 0; font-size: 14px; }
-    a { color: #60a5fa; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
-    .badge.running { background: #14532d; color: #86efac; }
-    .badge.idle { background: #1e3a5f; color: #93c5fd; }
-    .badge.error { background: #7f1d1d; color: #fca5a5; }
-    .empty { color: #64748b; font-style: italic; padding: 16px 0; }
-    .links { margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; }
-    .links a { background: #1e293b; border: 1px solid #334155; padding: 10px 20px; border-radius: 8px; font-size: 14px; }
-    .table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
-    .table th { text-align: left; color: #94a3b8; padding: 8px 12px; border-bottom: 1px solid #334155; font-weight: 600; }
-    .table td { padding: 8px 12px; border-bottom: 1px solid #1e293b; }
-    @media (max-width: 600px) { body { padding: 12px; } .grid { grid-template-columns: 1fr; } }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0a0e1a;
+      color: #e8edf5;
+      min-height: 100vh;
+    }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 240px;
+      background: #0d1225;
+      border-right: 1px solid #1a2240;
+      padding: 28px 16px;
+      flex-shrink: 0;
+    }
+    .sidebar .logo {
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 4px;
+    }
+    .sidebar .tagline { font-size: 11px; color: #4a5a7a; margin-bottom: 32px; letter-spacing: 0.3px; }
+    .sidebar .nav { list-style: none; }
+    .sidebar .nav li {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #6a7a9a;
+      margin-bottom: 4px;
+      cursor: default;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sidebar .nav li.active { background: #1a2240; color: #e8edf5; font-weight: 500; }
+    .sidebar .nav li .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #2a3a5a;
+      flex-shrink: 0;
+    }
+    .sidebar .nav li.active .dot { background: #60a5fa; box-shadow: 0 0 8px #60a5fa55; }
+    .sidebar .footer-nav { margin-top: 40px; }
+    .sidebar .footer-nav a {
+      display: block;
+      padding: 8px 14px;
+      font-size: 12px;
+      color: #4a5a7a;
+      text-decoration: none;
+      border-radius: 6px;
+    }
+    .sidebar .footer-nav a:hover { color: #60a5fa; background: #1a2240; }
+
+    .main {
+      flex: 1;
+      padding: 28px 32px;
+      overflow-y: auto;
+    }
+    .main-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 28px;
+    }
+    .main-header h1 { font-size: 22px; font-weight: 600; }
+    .main-header .sub { font-size: 13px; color: #4a5a7a; margin-top: 4px; }
+    .main-header .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .status-badge.live {
+      background: #0a2a1a;
+      color: #4ade80;
+      border: 1px solid #166534;
+    }
+    .status-badge .pulse {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #4ade80;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.4); }
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: linear-gradient(135deg, #111827, #0f1528);
+      border: 1px solid #1a2240;
+      border-radius: 14px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 3px;
+    }
+    .stat-card:nth-child(1)::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+    .stat-card:nth-child(2)::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+    .stat-card:nth-child(3)::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .stat-card:nth-child(4)::before { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .stat-card .label { font-size: 11px; color: #4a5a7a; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 500; margin-bottom: 8px; }
+    .stat-card .value { font-size: 30px; font-weight: 700; line-height: 1.2; }
+    .stat-card .value.blue { color: #60a5fa; }
+    .stat-card .value.purple { color: #a78bfa; }
+    .stat-card .value.yellow { color: #fbbf24; }
+    .stat-card .value.green { color: #4ade80; }
+    .stat-card .sub { font-size: 11px; color: #3a4a6a; margin-top: 4px; }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .chart-card {
+      background: #111827;
+      border: 1px solid #1a2240;
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .chart-card h3 { font-size: 13px; color: #4a5a7a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+    .chart-card canvas { max-height: 220px; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .detail-card {
+      background: #111827;
+      border: 1px solid #1a2240;
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .detail-card h3 {
+      font-size: 13px;
+      color: #4a5a7a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .detail-card h3 .count {
+      font-size: 11px;
+      background: #1a2240;
+      padding: 2px 10px;
+      border-radius: 10px;
+      color: #6a7a9a;
+    }
+    .event-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #0f1528;
+      font-size: 13px;
+    }
+    .event-row:last-child { border-bottom: none; }
+    .event-row .event-icon {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .event-row .event-icon.anomaly { background: #2d0a0a; color: #f87171; }
+    .event-row .event-icon.fix { background: #0a2a1a; color: #4ade80; }
+    .event-row .event-icon.review { background: #0a1a3a; color: #60a5fa; }
+    .event-row .event-icon.cycle { background: #1a0a3a; color: #a78bfa; }
+    .event-row .event-body { flex: 1; }
+    .event-row .event-body .title { font-weight: 500; color: #e8edf5; }
+    .event-row .event-body .desc { color: #4a5a7a; font-size: 12px; margin-top: 2px; }
+    .event-row .event-body .badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 8px;
+      border-radius: 10px;
+      margin-top: 4px;
+    }
+    .badge.critical { background: #2d0a0a; color: #f87171; }
+    .badge.warning { background: #2d1a0a; color: #fbbf24; }
+    .badge.suggestion { background: #0a1a3a; color: #60a5fa; }
+    .badge.executed { background: #0a2a1a; color: #4ade80; }
+
+    .improvement-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0 4px;
+      font-size: 13px;
+    }
+    .improvement-table th {
+      text-align: left;
+      color: #4a5a7a;
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 8px 12px;
+    }
+    .improvement-table td {
+      padding: 10px 12px;
+      background: #0d1225;
+      border-radius: 6px;
+    }
+    .improvement-table tr td:first-child { border-radius: 8px 0 0 8px; }
+    .improvement-table tr td:last-child { border-radius: 0 8px 8px 0; }
+    .improvement-table .pct.positive { color: #4ade80; font-weight: 600; }
+    .improvement-table .pct.negative { color: #f87171; font-weight: 600; }
+    .improvement-table .healed { color: #4ade80; }
+    .improvement-table .not-healed { color: #4a5a7a; }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #4a5a7a;
+    }
+    .empty-state .big-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+    .empty-state code {
+      background: #1a2240;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .links-bar {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .links-bar a {
+      background: #0d1225;
+      border: 1px solid #1a2240;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #6a7a9a;
+      text-decoration: none;
+    }
+    .links-bar a:hover { border-color: #3b82f6; color: #60a5fa; }
+
+    @media (max-width: 1024px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { padding: 20px 16px; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body>
-  <h1>MERA Dashboard</h1>
-  <div class="subtitle">Mirror Entity Recursive Agent — Self-Healing AI System</div>
-
-  {% set cycles = state.get("cycles", []) %}
-  {% set anomalies = state.get("anomalies", []) %}
-  {% set reviews = state.get("reviews", []) %}
-  {% set fixes = state.get("fixes", []) %}
-  {% set active_anomalies = anomalies | selectattr("resolved", "undefined") | list %}
-  {% set status = state.get("status", "idle") %}
-
-  <div class="badge {{ status.split()[0] | lower }}">{{ status }}</div>
-
-  <div class="grid">
-    <div class="card">
-      <h3>Cycles Completed</h3>
-      <div class="value blue">{{ cycles | length }}</div>
-    </div>
-    <div class="card">
-      <h3>Code Reviews</h3>
-      <div class="value blue">{{ reviews | length }}</div>
-    </div>
-    <div class="card">
-      <h3>Anomalies Detected</h3>
-      <div class="value {% if anomalies | length == 0 %}green{% elif anomalies | length > 10 %}red{% else %}yellow{% endif %}">{{ anomalies | length }}</div>
-    </div>
-    <div class="card">
-      <h3>Fixes Generated</h3>
-      <div class="value green">{{ fixes | length }}</div>
+<div class="layout">
+  <div class="sidebar">
+    <div class="logo">MERA</div>
+    <div class="tagline">Mirror Entity Recursive Agent</div>
+    <ul class="nav">
+      <li class="active"><span class="dot"></span> Overview</li>
+      <li><span class="dot"></span> Traces</li>
+      <li><span class="dot"></span> Anomalies</li>
+      <li><span class="dot"></span> Settings</li>
+    </ul>
+    <div class="footer-nav">
+      <a href="http://localhost:8080" target="_blank">SigNoz UI &rarr;</a>
+      <a href="https://github.com/rudrakhairnar16-bit/MERAAgent" target="_blank">GitHub &rarr;</a>
     </div>
   </div>
 
-  {% if cycles %}
-  <h2>Recent Cycles</h2>
-  {% for c in cycles %}
-  <div class="cycle">
-    <h4>Cycle {{ loop.index }}</h4>
-    <div class="meta">{{ c.get("timestamp", "N/A") }}</div>
-    {% if c.get("anomalies") %}
-      <p>{{ c["anomalies"] }} anomalies · {{ c.get("fixes", 0) }} fixes</p>
-    {% endif %}
-    {% if c.get("traces") is not none %}
-      <p>Traces: {{ c["traces"] }} · Alerts: {{ c.get("alerts", 0) }}</p>
-    {% endif %}
-  </div>
-  {% endfor %}
-  {% else %}
-  <div class="empty">No cycles yet. Run <code>python run.py</code> to start.</div>
-  {% endif %}
+  <div class="main">
+    {% set cycles = state.get("cycles", []) %}
+    {% set anomalies = state.get("anomalies", []) %}
+    {% set reviews = state.get("reviews", []) %}
+    {% set fixes = state.get("fixes", []) %}
+    {% set baseline = state.get("baseline", {}) %}
+    {% set healed = cycles | selectattr("self_healed", "equalto", True) | list %}
+    {% set has_data = cycles | length > 0 %}
 
-  {% if anomalies %}
-  <h2>Anomalies</h2>
-  {% for a in anomalies %}
-  <div class="anomaly">
-    <span class="type">{{ a.get("type", "unknown") }}</span>
-    <span class="sev {{ a.get("severity", "warning") }}">{{ a.get("severity", "warning") }}</span>
-    <p>{{ a.get("message", "") }}</p>
-  </div>
-  {% endfor %}
-  {% endif %}
+    <div class="main-header">
+      <div>
+        <h1>Dashboard</h1>
+        <div class="sub">Self-healing AI observability &mdash; {{ cycles | length }} cycles tracked</div>
+      </div>
+      <div class="status-badge live">
+        <span class="pulse"></span>
+        {% if has_data %}Live{% else %}Waiting{% endif %}
+      </div>
+    </div>
 
-  {% if fixes %}
-  <h2>Fixes Applied</h2>
-  {% for f in fixes %}
-  <div class="fix">
-    <strong>{{ f.get("action", "fix") }}</strong> ({{ f.get("priority", "low") }})
-    <p>{{ f.get("fix", "") }}</p>
-  </div>
-  {% endfor %}
-  {% endif %}
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Cycles</div>
+        <div class="value blue">{{ cycles | length }}</div>
+        <div class="sub">self-healing iterations</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Reviews</div>
+        <div class="value purple">{{ reviews | length }}</div>
+        <div class="sub">code analyses performed</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Anomalies</div>
+        <div class="value {% if anomalies|length == 0 %}green{% elif anomalies|length > 10 %}yellow{% else %}yellow{% endif %}">{{ anomalies | length }}</div>
+        <div class="sub">z-score based detection</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Fixes</div>
+        <div class="value green">{{ fixes | length }}</div>
+        <div class="sub">auto-executed actions</div>
+      </div>
+    </div>
 
-  <div class="links">
-    <a href="http://localhost:8080" target="_blank">SigNoz UI</a>
-    <a href="/api/status" target="_blank">API Status</a>
-    <a href="/api/cycles" target="_blank">API Cycles</a>
-    <a href="/api/anomalies" target="_blank">API Anomalies</a>
-  </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>Latency Improvement per Cycle</h3>
+        <canvas id="latencyChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Improvement Trend</h3>
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
 
-  <p style="margin-top: 32px; font-size: 12px; color: #475569;">
-    MERA v1.0.0 — <a href="https://github.com/rudrakhairnar16-bit/MERAAgent" target="_blank">GitHub</a>
-  </p>
+    <div class="detail-grid">
+      <div class="detail-card">
+        <h3>
+          <span>Activity Log</span>
+          {% if anomalies or fixes or reviews %}
+          <span class="count">{{ (anomalies|length + fixes|length + reviews|length) }} events</span>
+          {% endif %}
+        </h3>
+        {% if not has_data %}
+        <div class="empty-state">
+          <div class="big-icon">&#9679;&#9679;&#9679;</div>
+          <p>No activity yet. Run <code>python run.py</code> to start the demo.</p>
+        </div>
+        {% else %}
+          {% for r in reviews[-3:] | reverse %}
+          <div class="event-row">
+            <div class="event-icon review">R</div>
+            <div class="event-body">
+              <div class="title">Code Review &mdash; {{ r.get("language", "?") }}</div>
+              <div class="desc">{{ r.get("issues_count", 0) }} issues &middot; confidence {{ "%.2f" | format(r.get("confidence", 0)) }}</div>
+            </div>
+          </div>
+          {% endfor %}
+          {% for a in anomalies[-3:] | reverse %}
+          <div class="event-row">
+            <div class="event-icon anomaly">!</div>
+            <div class="event-body">
+              <div class="title">{{ a.get("type", "anomaly") }}</div>
+              <div class="desc">{{ a.get("message", "")[:60] }}</div>
+              <span class="badge {{ a.get('severity', 'warning') }}">{{ a.get("severity", "") }}</span>
+              {% if a.get("z_score") is not none %}
+              <span class="badge suggestion">z={{ "%.1f" | format(a.get("z_score", 0)) }}</span>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+          {% for f in fixes[-3:] | reverse %}
+          <div class="event-row">
+            <div class="event-icon fix">&#10003;</div>
+            <div class="event-body">
+              <div class="title">{{ f.get("action", "Fix") }}</div>
+              <div class="desc">{{ f.get("fix", "")[:60] }}</div>
+              {% if f.get("executed") %}
+              <span class="badge executed">EXECUTED</span>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+
+      <div class="detail-card">
+        <h3>
+          <span>Improvement Metrics</span>
+          {% if healed %}
+          <span class="count">{{ healed | length }}/{{ cycles | length }} healed</span>
+          {% endif %}
+        </h3>
+        {% if not has_data %}
+        <div class="empty-state">
+          <div class="big-icon">&#9679;&#9679;&#9679;</div>
+          <p>Cycle data will appear here after running the demo.</p>
+        </div>
+        {% else %}
+        <table class="improvement-table">
+          <thead>
+            <tr>
+              <th>Cycle</th>
+              <th>Before</th>
+              <th>After</th>
+              <th>Improvement</th>
+              <th>Healed</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for c in cycles %}
+            {% if c.get("latency_before") or c.get("latency_after") %}
+            <tr>
+              <td style="font-weight: 500;">#{{ c.get("cycle", loop.index) }}</td>
+              <td>{{ "%.0f" | format(c.get("latency_before", 0)) }}ms</td>
+              <td>{{ "%.0f" | format(c.get("latency_after", 0)) }}ms</td>
+              <td>
+                {% set pct = c.get("latency_improvement_pct", 0) %}
+                <span class="pct {% if pct > 0 %}positive{% elif pct < 0 %}negative{% endif %}">
+                  {{ "%+.1f" | format(pct) }}%
+                </span>
+              </td>
+              <td>
+                {% if c.get("self_healed") %}
+                <span class="healed">&#10003;</span>
+                {% else %}
+                <span class="not-healed">&mdash;</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endif %}
+          {% endfor %}
+          </tbody>
+        </table>
+        {% if baseline.get("total_samples", 0) > 0 %}
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #1a2240; display: flex; gap: 16px; font-size: 12px; color: #4a5a7a;">
+          <span>Total samples: <strong style="color:#e8edf5;">{{ baseline.get("total_samples", 0) }}</strong></span>
+          <span>Session samples: <strong style="color:#e8edf5;">{{ baseline.get("latency_ms", {}).get("count", 0) }}</strong></span>
+        </div>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="links-bar">
+      <a href="http://localhost:8080" target="_blank">SigNoz</a>
+      <a href="/api/status" target="_blank">API Status</a>
+      <a href="/api/cycles" target="_blank">API Cycles</a>
+      <a href="/api/anomalies" target="_blank">API Anomalies</a>
+      <a href="/api/baseline" target="_blank">API Baseline</a>
+      <a href="/api/improvements" target="_blank">API Improvements</a>
+    </div>
+
+    <div style="margin-top: 24px; font-size: 11px; color: #2a3a5a; text-align: center;">
+      MERA v2.0 &mdash; Agents of SigNoz Hackathon 2026
+    </div>
+  </div>
+</div>
+
+<script>
+const cycles = {{ cycles | tojson | safe }};
+const improved = cycles.filter(c => c.latency_before || c.latency_after);
+
+if (improved.length > 0) {
+  const labels = improved.map(c => 'Cycle ' + (c.cycle || (improved.indexOf(c) + 1)));
+  const before = improved.map(c => c.latency_before || 0);
+  const after = improved.map(c => c.latency_after || 0);
+  const pcts = improved.map(c => c.latency_improvement_pct || 0);
+
+  Chart.defaults.color = '#4a5a7a';
+  Chart.defaults.borderColor = '#1a2240';
+
+  new Chart(document.getElementById('latencyChart'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Before (ms)',
+          data: before,
+          backgroundColor: 'rgba(96, 165, 250, 0.3)',
+          borderColor: '#60a5fa',
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+        {
+          label: 'After (ms)',
+          data: after,
+          backgroundColor: 'rgba(74, 222, 128, 0.3)',
+          borderColor: '#4ade80',
+          borderWidth: 1,
+          borderRadius: 4,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { boxWidth: 8, padding: 12 } } },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: '#0f1528' },
+          ticks: { callback: v => v + 'ms' }
+        },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Improvement %',
+        data: pcts,
+        borderColor: '#a78bfa',
+        backgroundColor: 'rgba(167, 139, 250, 0.1)',
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: '#a78bfa',
+        pointRadius: 4,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { boxWidth: 8, padding: 12 } } },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: '#0f1528' },
+          ticks: { callback: v => v + '%' }
+        },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+} else {
+  document.querySelectorAll('.chart-card canvas').forEach(c => {
+    c.parentNode.innerHTML = '<div class="empty-state"><p>Charts will render after demo data is collected.</p></div>';
+  });
+}
+
+setTimeout(() => location.reload(), 5000);
+</script>
 </body>
 </html>
