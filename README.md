@@ -80,7 +80,7 @@ MERAAgent/
 │   ├── state.py                 # Shared state (JSON file)
 │   ├── signoz_config/           # OTel collector config
 │   ├── dashboards/              # SigNoz dashboard template
-│   ├── tests/test_mera.py       # 8 unit tests
+│   ├── tests/test_mera.py       # 27 tests (25 non-LLM + 2 LLM)
 │   ├── scripts/                 # Setup + demo scripts
 │   ├── docs/architecture.md     # Architecture doc
 │   ├── casting.yaml             # Foundry deployment config
@@ -235,20 +235,6 @@ Then open http://localhost:9000 to see live cycle data, anomalies, and fixes.
 
 ---
 
-## Screenshots
-
-| Component | Description |
-|---|---|
-| **Terminal Dashboard** | Full-screen live UI — spinners, progress bars, color-coded anomaly table |
-| **Web Dashboard** | http://localhost:9000 — FastAPI dashboard with cycle stats, anomalies, fixes |
-| **SigNoz Traces** | http://localhost:8080 — OTel-instrumented agent spans |
-| **SigNoz Dashboard** | 8-panel dashboard with latency, confidence, anomaly tracking |
-| **SigNoz Alerts** | 3 alert rules: latency, confidence, anomaly count |
-
-*(Add screenshots/video to `docs/screenshots/` and link them here. The terminal dashboard looks great in a demo recording!)*
-
----
-
 ## SigNoz Features Used
 
 | Feature | Usage |
@@ -289,8 +275,8 @@ python run.py
 
 ```powershell
 cd Track_3
-pytest -v -m "not llm"     # Run non-LLM tests (works without Ollama)
-pytest -v                   # Run all tests (requires Ollama)
+pytest -v -m "not llm"     # Run 25 non-LLM tests (works without Ollama)
+pytest -v                   # Run all 27 tests (requires Ollama)
 ```
 
 ---
@@ -298,3 +284,5 @@ pytest -v                   # Run all tests (requires Ollama)
 ## License
 
 MIT — Built for the Agents of SigNoz Hackathon.
+
+
