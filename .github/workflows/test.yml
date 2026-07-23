@@ -27,7 +27,21 @@ jobs:
       - name: Verify imports
         working-directory: Track_3
         run: |
-          python -c "import sys; sys.path.insert(0, '.'); print('Importing mirror_agent.detector...', end=' '); from mirror_agent.detector import AdaptiveDetector, MetricWindow; print('OK'); print('Importing mirror_agent.healer...', end=' '); from mirror_agent.healer import ActionExecutor; print('OK'); print('Importing state...', end=' '); from state import get_state, append_cycle, save_state; print('OK'); print('All imports OK')"
+          echo "=== Python version ==="
+          python --version
+          echo "=== Working directory ==="
+          pwd
+          echo "=== Track_3 contents ==="
+          ls -la
+          echo "=== mirror_agent exists? ==="
+          test -d mirror_agent && echo "YES" || echo "NO"
+          echo "=== import mirror_agent.detector ==="
+          python -c "import sys; sys.path.insert(0, '.'); from mirror_agent.detector import AdaptiveDetector, MetricWindow; print('OK')"
+          echo "=== import mirror_agent.healer ==="
+          python -c "import sys; sys.path.insert(0, '.'); from mirror_agent.healer import ActionExecutor; print('OK')"
+          echo "=== import state ==="
+          python -c "import sys; sys.path.insert(0, '.'); from state import get_state, append_cycle, save_state; print('OK')"
+          echo "=== All imports passed ==="
 
       - name: Run non-LLM tests
         working-directory: Track_3
