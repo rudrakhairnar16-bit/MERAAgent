@@ -1,5 +1,5 @@
 {
-  "title": "MERA - Mirror Entity Recursive Agent",
+  "title": "MERA - Mirror Entity Recursive Agent v2",
   "panels": [
     {"title":"Review Latency","query":"avg(duration_ms) WHERE service.name='mera-main-agent'","type":"timeseries","unit":"ms"},
     {"title":"LLM Confidence","query":"avg(attributes.review.confidence_score) WHERE service.name='mera-main-agent'","type":"gauge","min":0,"max":1},
@@ -8,7 +8,9 @@
     {"title":"Issues per Review","query":"avg(attributes.review.issues_count) BY attributes.code.language WHERE service.name='mera-main-agent'","type":"bar"},
     {"title":"Error Rate","query":"sum(rate(span_count{status_code='ERROR'})) BY service.name","type":"timeseries"},
     {"title":"Service Graph","query":"service_graph WHERE service.name IN ['mera-main-agent','mera-mirror-agent']","type":"traces"},
-    {"title":"Recent Traces","query":"traces WHERE service.name='mera-main-agent' | limit 20","type":"list"}
+    {"title":"Recent Traces","query":"traces WHERE service.name='mera-main-agent' | limit 20","type":"list"},
+    {"title":"Latency Improvement","query":"avg(duration_ms) BY service.name WHERE service.name='mera-main-agent'","type":"timeseries","unit":"ms"},
+    {"title":"Fix Success Rate","query":"rate(count(attributes.mirror.fix_success='true') / count(attributes.mirror.fix_executed='true'))","type":"gauge","min":0,"max":1}
   ],
   "alerts": [
     {"name":"MERAHQ-HighLatency","condition":"avg(duration_ms) > 5000 for 5m","severity":"warning"},
